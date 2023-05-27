@@ -307,6 +307,7 @@ type Options struct {
 	ToggleSort   bool
 	Expect       map[tui.Event]string
 	Keymap       map[tui.Event][]*action
+	KeymapBrowse map[tui.Event][]*action
 	Preview      previewOpts
 	PrintQuery   bool
 	ReadZero     bool
@@ -329,6 +330,7 @@ type Options struct {
 	ListenPort   *int
 	ClearOnExit  bool
 	Version      bool
+	BrowseMode   bool
 }
 
 func defaultPreviewOpts(command string) previewOpts {
@@ -378,6 +380,7 @@ func defaultOptions() *Options {
 		ToggleSort:   false,
 		Expect:       make(map[tui.Event]string),
 		Keymap:       make(map[tui.Event][]*action),
+		KeymapBrowse: make(map[tui.Event][]*action),
 		Preview:      defaultPreviewOpts(""),
 		PrintQuery:   false,
 		ReadZero:     false,
@@ -397,7 +400,9 @@ func defaultOptions() *Options {
 		BorderLabel:  labelOpts{},
 		PreviewLabel: labelOpts{},
 		ClearOnExit:  true,
-		Version:      false}
+		Version:      false,
+		BrowseMode:   false,
+	}
 }
 
 func help(code int) {
@@ -1171,6 +1176,8 @@ func parseActionList(masked string, original string, prevActions []*action, putA
 			appendAction(actEnableSearch)
 		case "disable-search":
 			appendAction(actDisableSearch)
+		case "toggle-browse":
+			appendAction(actToggleBrowse)
 		case "put":
 			if putAllowed {
 				appendAction(actRune)
@@ -1578,6 +1585,12 @@ func parseOptions(opts *Options, allArgs []string) {
 			opts.Criteria = parseTiebreak(nextString(allArgs, &i, "sort criterion required"))
 		case "--bind":
 			parseKeymap(opts.Keymap, nextString(allArgs, &i, "bind expression required"), errorExit)
+		case "--bind-browse":
+			parseKeymap(opts.KeymapBrowse, nextString(allArgs, &i, "bind browse expression required"), errorExit)
+		case "--bind-all":
+			nextStr := nextString(allArgs, &i, "bind expression required")
+			parseKeymap(opts.Keymap, nextStr, errorExit)
+			parseKeymap(opts.KeymapBrowse, nextStr, errorExit)
 		case "--color":
 			_, spec := optionalNextString(allArgs, &i)
 			if len(spec) == 0 {
@@ -1805,6 +1818,10 @@ func parseOptions(opts *Options, allArgs []string) {
 			opts.ClearOnExit = false
 		case "--version":
 			opts.Version = true
+		case "--browse-mode":
+			opts.BrowseMode = true
+		case "--no-browse-mode":
+			opts.BrowseMode = false
 		case "--":
 			// Ignored
 		default:
@@ -1868,6 +1885,11 @@ func parseOptions(opts *Options, allArgs []string) {
 				opts.Theme = parseTheme(opts.Theme, value)
 			} else if match, value := optString(arg, "--bind="); match {
 				parseKeymap(opts.Keymap, value, errorExit)
+			} else if match, value := optString(arg, "--bind-browse="); match {
+				parseKeymap(opts.KeymapBrowse, value, errorExit)
+			} else if match, value := optString(arg, "--bind-all="); match {
+				parseKeymap(opts.Keymap, value, errorExit)
+				parseKeymap(opts.KeymapBrowse, value, errorExit)
 			} else if match, value := optString(arg, "--history="); match {
 				setHistory(value)
 			} else if match, value := optString(arg, "--history-size="); match {
@@ -1959,6 +1981,36 @@ func validateSign(sign string, signOptName string) error {
 	return nil
 }
 
+func postProcessKeymap(keymap *map[tui.Event][]*action, opts *Options, optsKeymap *map[tui.Event][]*action) {
+	for key, actions := range (*optsKeymap) {
+		reordered := []*action{}
+		for _, act := range actions {
+			switch act.t {
+			case actToggleSort:
+				// To display "+S"/"-S" on info line
+				opts.ToggleSort = true
+			case actTogglePreview, actShowPreview, actHidePreview, actChangePreviewWindow:
+				reordered = append(reordered, act)
+			}
+		}
+
+		// Re-organize actions so that we put actions that change the preview window first in the list.
+		//  *  change-preview-window(up,+10)+preview(sleep 3; cat {})+change-preview-window(up,+20)
+		//  -> change-preview-window(up,+10)+change-preview-window(up,+20)+preview(sleep 3; cat {})
+		if len(reordered) > 0 {
+			for _, act := range actions {
+				switch act.t {
+				case actTogglePreview, actShowPreview, actHidePreview, actChangePreviewWindow:
+				default:
+					reordered = append(reordered, act)
+				}
+			}
+			actions = reordered
+		}
+		(*keymap)[key] = actions
+	}
+}
+
 func postProcessOptions(opts *Options) {
 	if !opts.Version && !tui.IsLightRendererSupported() && opts.Height.size > 0 {
 		errorExit("--height option is currently not supported on this platform")
@@ -1988,34 +2040,13 @@ func postProcessOptions(opts *Options) {
 
 	// Extend the default key map
 	keymap := defaultKeymap()
-	for key, actions := range opts.Keymap {
-		reordered := []*action{}
-		for _, act := range actions {
-			switch act.t {
-			case actToggleSort:
-				// To display "+S"/"-S" on info line
-				opts.ToggleSort = true
-			case actTogglePreview, actShowPreview, actHidePreview, actChangePreviewWindow:
-				reordered = append(reordered, act)
-			}
-		}
-
-		// Re-organize actions so that we put actions that change the preview window first in the list.
-		//  *  change-preview-window(up,+10)+preview(sleep 3; cat {})+change-preview-window(up,+20)
-		//  -> change-preview-window(up,+10)+change-preview-window(up,+20)+preview(sleep 3; cat {})
-		if len(reordered) > 0 {
-			for _, act := range actions {
-				switch act.t {
-				case actTogglePreview, actShowPreview, actHidePreview, actChangePreviewWindow:
-				default:
-					reordered = append(reordered, act)
-				}
-			}
-			actions = reordered
-		}
-		keymap[key] = actions
-	}
+	postProcessKeymap(&keymap, opts, &opts.Keymap)
 	opts.Keymap = keymap
+
+	// Extend the default browse key map
+	keymapBrowse := defaultKeymapBrowse()
+	postProcessKeymap(&keymapBrowse, opts, &opts.KeymapBrowse)
+	opts.KeymapBrowse = keymapBrowse
 
 	// If 'double-click' is left unbound, bind it to the action bound to 'enter'
 	if _, prs := opts.Keymap[tui.DoubleClick.AsEvent()]; !prs {

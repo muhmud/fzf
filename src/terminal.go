@@ -189,6 +189,7 @@ type Terminal struct {
 	expect             map[tui.Event]string
 	keymap             map[tui.Event][]*action
 	keymapOrg          map[tui.Event][]*action
+	keymapBrowse       map[tui.Event][]*action
 	pressed            string
 	printQuery         bool
 	history            *History
@@ -250,6 +251,7 @@ type Terminal struct {
 	theme              *tui.ColorTheme
 	tui                tui.Renderer
 	executing          *util.AtomicBool
+	browseMode         bool
 }
 
 type selectedItem struct {
@@ -396,6 +398,7 @@ const (
 	actUnbind
 	actRebind
 	actBecome
+	actToggleBrowse
 )
 
 type placeholderFlags struct {
@@ -467,6 +470,7 @@ func defaultKeymap() map[tui.Event][]*action {
 	add(tui.CtrlP, actUp)
 	add(tui.CtrlU, actUnixLineDiscard)
 	add(tui.CtrlW, actUnixWordRubout)
+	addEvent(tui.AltKey(' '), actToggleBrowse)
 	add(tui.CtrlY, actYank)
 	if !util.IsWindows() {
 		add(tui.CtrlZ, actSigStop)
@@ -478,6 +482,90 @@ func defaultKeymap() map[tui.Event][]*action {
 	add(tui.SRight, actForwardWord)
 	addEvent(tui.AltKey('d'), actKillWord)
 	add(tui.AltBS, actBackwardKillWord)
+
+	add(tui.Up, actUp)
+	add(tui.Down, actDown)
+	add(tui.Left, actBackwardChar)
+	add(tui.Right, actForwardChar)
+
+	add(tui.Home, actBeginningOfLine)
+	add(tui.End, actEndOfLine)
+	add(tui.Del, actDeleteChar)
+	add(tui.PgUp, actPageUp)
+	add(tui.PgDn, actPageDown)
+
+	add(tui.SUp, actPreviewUp)
+	add(tui.SDown, actPreviewDown)
+
+	add(tui.Mouse, actMouse)
+	add(tui.LeftClick, actIgnore)
+	add(tui.RightClick, actToggle)
+	return keymap
+}
+
+func defaultKeymapBrowse() map[tui.Event][]*action {
+	keymap := make(map[tui.Event][]*action)
+	add := func(e tui.EventType, a ...actionType) {
+		keymap[e.AsEvent()] = toActions(a...)
+	}
+	addEvent := func(e tui.Event, a ...actionType) {
+		keymap[e] = toActions(a...)
+	}
+
+	// General navigation
+	addEvent(tui.Key('f'), actPageDown)
+	addEvent(tui.Key('b'), actPageUp)
+	addEvent(tui.Key('d'), actHalfPageDown)
+	addEvent(tui.Key('u'), actHalfPageUp)
+	addEvent(tui.Key('j'), actDown)
+	addEvent(tui.Key('k'), actUp)
+	addEvent(tui.Key('g'), actLast)
+	addEvent(tui.Key('G'), actFirst)
+
+	// Similar navigation for the preview window
+	addEvent(tui.AltKey('f'), actPreviewPageDown)
+	addEvent(tui.AltKey('b'), actPreviewPageUp)
+	addEvent(tui.AltKey('d'), actPreviewHalfPageDown)
+	addEvent(tui.AltKey('u'), actPreviewHalfPageUp)
+	addEvent(tui.AltKey('j'), actPreviewDown)
+	addEvent(tui.AltKey('k'), actPreviewUp)
+	addEvent(tui.AltKey('g'), actPreviewTop)
+	addEvent(tui.AltKey('G'), actPreviewBottom)
+
+	// Other preview command(s)
+	addEvent(tui.Key('p'), actTogglePreview)
+
+	// Edit line command(s)
+	addEvent(tui.Key('D'), actKillLine)
+	addEvent(tui.Key('H'), actBackwardChar)
+	addEvent(tui.Key('L'), actForwardChar)
+	addEvent(tui.Key('B'), actBackwardWord)
+	addEvent(tui.Key('W'), actForwardWord)
+	addEvent(tui.Key('X'), actDeleteChar)
+	addEvent(tui.Key('0'), actBeginningOfLine)
+	addEvent(tui.Key('$'), actEndOfLine)
+
+	// Command(s) to change to edit mode
+	addEvent(tui.AltKey(' '), actToggleBrowse)
+	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)   // Clear current query and drop into edit mode
+	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar)  // Vim-like append command
+	addEvent(tui.Key('i'), actToggleBrowse)                  // Vim-like insert mode command
+	addEvent(tui.Key('/'), actToggleBrowse, actEndOfLine)
+	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar)  // Allow shortcut to edit mode through backspace 
+
+	// Other command(s)
+	addEvent(tui.Key('q'), actAbort)
+
+	// Replicate some of the command(s) from edit mode
+	add(tui.CtrlC, actAbort)
+	add(tui.CtrlG, actAbort)
+	add(tui.CtrlQ, actAbort)
+	add(tui.ESC, actAbort)
+	add(tui.CtrlL, actClearScreen)
+	add(tui.CtrlM, actAccept)
+	if !util.IsWindows() {
+		add(tui.CtrlZ, actSigStop)
+	}
 
 	add(tui.Up, actUp)
 	add(tui.Down, actDown)
@@ -613,6 +701,7 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		expect:             opts.Expect,
 		keymap:             opts.Keymap,
 		keymapOrg:          keymapCopy,
+		keymapBrowse:       opts.KeymapBrowse,
 		pressed:            "",
 		printQuery:         opts.PrintQuery,
 		history:            opts.History,
@@ -665,7 +754,9 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		eventChan:          make(chan tui.Event, 1),
 		tui:                renderer,
 		initFunc:           func() { renderer.Init() },
-		executing:          util.NewAtomicBool(false)}
+		executing:          util.NewAtomicBool(false),
+		browseMode:         opts.BrowseMode,
+	}
 	t.prompt, t.promptLen = t.parsePrompt(opts.Prompt)
 	t.pointer, t.pointerLen = t.processTabs([]rune(opts.Pointer), 0)
 	t.marker, t.markerLen = t.processTabs([]rune(opts.Marker), 0)
@@ -1516,6 +1607,9 @@ func (t *Terminal) printInfo() {
 		} else {
 			output += fmt.Sprintf(" (%d/%d)", len(t.selected), t.multi)
 		}
+	}
+	if t.browseMode {
+		output += " B"
 	}
 	if t.progress > 0 && t.progress < 100 {
 		output += fmt.Sprintf(" (%d%%)", t.progress)
@@ -2934,8 +3028,19 @@ func (t *Terminal) Loop() {
 			}
 		}
 
+		actionsForEvent := func(event tui.Event) []*action {
+			if t.browseMode {
+				if val, ok := t.keymapBrowse[event]; ok {
+					return val
+				}
+				return toActions(actIgnore)
+			}
+
+			return t.keymap[event]
+		}
+
 		actionsFor := func(eventType tui.EventType) []*action {
-			return t.keymap[eventType.AsEvent()]
+			return actionsForEvent(eventType.AsEvent())
 		}
 
 		var doAction func(*action) bool
@@ -3587,6 +3692,10 @@ func (t *Terminal) Loop() {
 						}
 					}
 				}
+			case actToggleBrowse:
+				t.browseMode = !t.browseMode
+				t.printInfo()
+				t.refresh()
 			}
 			return true
 		}
@@ -3598,7 +3707,7 @@ func (t *Terminal) Loop() {
 				req(reqList)
 			}
 			if len(actions) == 0 {
-				actions = t.keymap[event.Comparable()]
+				actions = actionsForEvent(event.Comparable())
 			}
 			if len(actions) == 0 && event.Type == tui.Rune {
 				doAction(&action{t: actRune})
