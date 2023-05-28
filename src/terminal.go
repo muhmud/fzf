@@ -548,11 +548,13 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 
 	// Command(s) to change to edit mode
 	addEvent(tui.AltKey(' '), actToggleBrowse)
-	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)  // Clear current query and drop into edit mode
-	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar) // Vim-like append command
-	addEvent(tui.Key('i'), actToggleBrowse)                 // Vim-like insert mode command
+	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)          // Clear current query and drop into edit mode
+	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar)         // Vim-like append command
+	addEvent(tui.Key('A'), actToggleBrowse, actEndOfLine)           // Vim-like append at end of line
+	addEvent(tui.Key('i'), actToggleBrowse)                         // Vim-like insert mode command
+	addEvent(tui.Key('I'), actToggleBrowse, actBeginningOfLine)     // Vim-like insert mode command
 	addEvent(tui.Key('/'), actToggleBrowse, actEndOfLine)
-	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar) // Allow shortcut to edit mode through backspace
+	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar)         // Allow shortcut to edit mode through backspace
 
 	// Other command(s)
 	addEvent(tui.Key('q'), actAbort)
