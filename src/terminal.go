@@ -399,6 +399,7 @@ const (
 	actRebind
 	actBecome
 	actToggleBrowse
+	actNoInputExit
 )
 
 type placeholderFlags struct {
@@ -547,11 +548,11 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 
 	// Command(s) to change to edit mode
 	addEvent(tui.AltKey(' '), actToggleBrowse)
-	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)   // Clear current query and drop into edit mode
-	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar)  // Vim-like append command
-	addEvent(tui.Key('i'), actToggleBrowse)                  // Vim-like insert mode command
+	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)  // Clear current query and drop into edit mode
+	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar) // Vim-like append command
+	addEvent(tui.Key('i'), actToggleBrowse)                 // Vim-like insert mode command
 	addEvent(tui.Key('/'), actToggleBrowse, actEndOfLine)
-	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar)  // Allow shortcut to edit mode through backspace 
+	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar) // Allow shortcut to edit mode through backspace
 
 	// Other command(s)
 	addEvent(tui.Key('q'), actAbort)
@@ -3696,6 +3697,10 @@ func (t *Terminal) Loop() {
 				t.browseMode = !t.browseMode
 				t.printInfo()
 				t.refresh()
+			case actNoInputExit:
+				if t.cx == 0 {
+					req(reqQuit)
+				}
 			}
 			return true
 		}

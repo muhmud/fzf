@@ -1178,6 +1178,8 @@ func parseActionList(masked string, original string, prevActions []*action, putA
 			appendAction(actDisableSearch)
 		case "toggle-browse":
 			appendAction(actToggleBrowse)
+		case "no-input-exit":
+			appendAction(actNoInputExit)
 		case "put":
 			if putAllowed {
 				appendAction(actRune)
@@ -1982,7 +1984,7 @@ func validateSign(sign string, signOptName string) error {
 }
 
 func postProcessKeymap(keymap *map[tui.Event][]*action, opts *Options, optsKeymap *map[tui.Event][]*action) {
-	for key, actions := range (*optsKeymap) {
+	for key, actions := range *optsKeymap {
 		reordered := []*action{}
 		for _, act := range actions {
 			switch act.t {
