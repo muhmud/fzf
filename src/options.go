@@ -306,6 +306,7 @@ type Options struct {
 	Filter       *string
 	ToggleSort   bool
 	Expect       map[tui.Event]string
+	ExpectBrowse map[tui.Event]string
 	Keymap       map[tui.Event][]*action
 	KeymapBrowse map[tui.Event][]*action
 	Preview      previewOpts
@@ -379,6 +380,7 @@ func defaultOptions() *Options {
 		Filter:       nil,
 		ToggleSort:   false,
 		Expect:       make(map[tui.Event]string),
+		ExpectBrowse: make(map[tui.Event]string),
 		Keymap:       make(map[tui.Event][]*action),
 		KeymapBrowse: make(map[tui.Event][]*action),
 		Preview:      defaultPreviewOpts(""),
@@ -1577,8 +1579,14 @@ func parseOptions(opts *Options, allArgs []string) {
 			for k, v := range parseKeyChords(nextString(allArgs, &i, "key names required"), "key names required") {
 				opts.Expect[k] = v
 			}
+		case "--expect-browse":
+			for k, v := range parseKeyChords(nextString(allArgs, &i, "key names required"), "key names required") {
+				opts.ExpectBrowse[k] = v
+			}
 		case "--no-expect":
 			opts.Expect = make(map[tui.Event]string)
+		case "--no-expect-browse":
+			opts.ExpectBrowse = make(map[tui.Event]string)
 		case "--enabled", "--no-phony":
 			opts.Phony = false
 		case "--disabled", "--phony":
@@ -1880,6 +1888,10 @@ func parseOptions(opts *Options, allArgs []string) {
 			} else if match, value := optString(arg, "--expect="); match {
 				for k, v := range parseKeyChords(value, "key names required") {
 					opts.Expect[k] = v
+				}
+			} else if match, value := optString(arg, "--expect-browse="); match {
+				for k, v := range parseKeyChords(value, "key names required") {
+					opts.ExpectBrowse[k] = v
 				}
 			} else if match, value := optString(arg, "--tiebreak="); match {
 				opts.Criteria = parseTiebreak(value)

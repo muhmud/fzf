@@ -187,6 +187,7 @@ type Terminal struct {
 	track              trackOption
 	delimiter          Delimiter
 	expect             map[tui.Event]string
+	expectBrowse       map[tui.Event]string
 	keymap             map[tui.Event][]*action
 	keymapOrg          map[tui.Event][]*action
 	keymapBrowse       map[tui.Event][]*action
@@ -703,6 +704,7 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		track:              opts.Track,
 		delimiter:          opts.Delimiter,
 		expect:             opts.Expect,
+		expectBrowse:       opts.ExpectBrowse,
 		keymap:             opts.Keymap,
 		keymapOrg:          keymapCopy,
 		keymapBrowse:       opts.KeymapBrowse,
@@ -1087,7 +1089,7 @@ func (t *Terminal) output() bool {
 	if t.printQuery {
 		t.printer(string(t.input))
 	}
-	if len(t.expect) > 0 {
+	if len(t.expect) > 0 || len(t.expectBrowse) > 0 {
 		t.printer(t.pressed)
 	}
 	found := len(t.selected) > 0
@@ -3023,14 +3025,25 @@ func (t *Terminal) Loop() {
 		scrollPreviewBy := func(amount int) {
 			scrollPreviewTo(t.previewer.offset + amount)
 		}
-		for key, ret := range t.expect {
-			if keyMatch(key, event) {
-				t.pressed = ret
-				t.reqBox.Set(reqClose, nil)
-				t.mutex.Unlock()
-				return
-			}
-		}
+    if t.browseMode {
+      for key, ret := range t.expectBrowse {
+        if keyMatch(key, event) {
+          t.pressed = ret
+          t.reqBox.Set(reqClose, nil)
+          t.mutex.Unlock()
+          return
+        }
+      }
+    } else {
+      for key, ret := range t.expect {
+        if keyMatch(key, event) {
+          t.pressed = ret
+          t.reqBox.Set(reqClose, nil)
+          t.mutex.Unlock()
+          return
+        }
+      }
+    }
 
 		actionsForEvent := func(event tui.Event) []*action {
 			if t.browseMode {
