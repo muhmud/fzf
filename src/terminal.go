@@ -549,14 +549,14 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 
 	// Command(s) to change to edit mode
 	addEvent(tui.AltKey(' '), actToggleBrowse)
-	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)          // Clear current query and drop into edit mode
-	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar)         // Vim-like append command
-	addEvent(tui.Key('A'), actToggleBrowse, actEndOfLine)           // Vim-like append at end of line
-	addEvent(tui.Key('i'), actToggleBrowse)                         // Vim-like insert mode command
-	addEvent(tui.Key(' '), actToggleBrowse)                         // Nice shortcut to insert mode
-	addEvent(tui.Key('I'), actToggleBrowse, actBeginningOfLine)     // Vim-like insert mode command
+	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)      // Clear current query and drop into edit mode
+	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar)     // Vim-like append command
+	addEvent(tui.Key('A'), actToggleBrowse, actEndOfLine)       // Vim-like append at end of line
+	addEvent(tui.Key('i'), actToggleBrowse)                     // Vim-like insert mode command
+	addEvent(tui.Key(' '), actToggleBrowse)                     // Nice shortcut to insert mode
+	addEvent(tui.Key('I'), actToggleBrowse, actBeginningOfLine) // Vim-like insert mode command
 	addEvent(tui.Key('/'), actToggleBrowse, actEndOfLine)
-	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar)         // Allow shortcut to edit mode through backspace
+	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar) // Allow shortcut to edit mode through backspace
 
 	// Other command(s)
 	addEvent(tui.Key('q'), actAbort)
@@ -3025,25 +3025,25 @@ func (t *Terminal) Loop() {
 		scrollPreviewBy := func(amount int) {
 			scrollPreviewTo(t.previewer.offset + amount)
 		}
-    if t.browseMode {
-      for key, ret := range t.expectBrowse {
-        if keyMatch(key, event) {
-          t.pressed = ret
-          t.reqBox.Set(reqClose, nil)
-          t.mutex.Unlock()
-          return
-        }
-      }
-    } else {
-      for key, ret := range t.expect {
-        if keyMatch(key, event) {
-          t.pressed = ret
-          t.reqBox.Set(reqClose, nil)
-          t.mutex.Unlock()
-          return
-        }
-      }
-    }
+		if t.browseMode {
+			for key, ret := range t.expectBrowse {
+				if keyMatch(key, event) {
+					t.pressed = ret
+					t.reqBox.Set(reqClose, nil)
+					t.mutex.Unlock()
+					return
+				}
+			}
+		} else {
+			for key, ret := range t.expect {
+				if keyMatch(key, event) {
+					t.pressed = ret
+					t.reqBox.Set(reqClose, nil)
+					t.mutex.Unlock()
+					return
+				}
+			}
+		}
 
 		actionsForEvent := func(event tui.Event) []*action {
 			if t.browseMode {
@@ -3374,10 +3374,18 @@ func (t *Terminal) Loop() {
 					req(reqList, reqInfo)
 				}
 			case actFirst:
-				t.vset(0)
+				if t.layout == layoutDefault {
+					t.vset(0)
+				} else {
+					t.vset(t.merger.Length() - 1)
+				}
 				req(reqList)
 			case actLast:
-				t.vset(t.merger.Length() - 1)
+				if t.layout == layoutDefault {
+					t.vset(t.merger.Length() - 1)
+				} else {
+					t.vset(0)
+				}
 				req(reqList)
 			case actPosition:
 				if n, e := strconv.Atoi(a.a); e == nil {
