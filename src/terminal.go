@@ -78,6 +78,15 @@ const (
 	enabledState
 )
 
+type terminalMode int
+
+const (
+	insertMode terminalMode = iota
+	normalMode
+	browseMode
+	previewMode
+)
+
 func (s resumableState) Enabled() bool {
 	return s == enabledState
 }
@@ -186,11 +195,9 @@ type Terminal struct {
 	toggleSort         bool
 	track              trackOption
 	delimiter          Delimiter
-	expect             map[tui.Event]string
-	expectBrowse       map[tui.Event]string
-	keymap             map[tui.Event][]*action
-	keymapOrg          map[tui.Event][]*action
-	keymapBrowse       map[tui.Event][]*action
+	mode               terminalMode
+	modeKeymaps        map[terminalMode]map[tui.Event][]*action
+	modeExpects        map[terminalMode]map[tui.Event]string
 	pressed            string
 	printQuery         bool
 	history            *History
@@ -252,7 +259,6 @@ type Terminal struct {
 	theme              *tui.ColorTheme
 	tui                tui.Renderer
 	executing          *util.AtomicBool
-	browseMode         bool
 }
 
 type selectedItem struct {
@@ -399,7 +405,10 @@ const (
 	actUnbind
 	actRebind
 	actBecome
-	actToggleBrowse
+	actInsertMode
+	actNormalMode
+	actBrowseMode
+	actPreviewMode
 	actNoInputExit
 )
 
@@ -440,6 +449,19 @@ func toActions(types ...actionType) []*action {
 	return actions
 }
 
+func defaultKeymapFor(mode terminalMode) map[tui.Event][]*action {
+	switch mode {
+	case insertMode:
+		return defaultKeymap()
+	case browseMode:
+		return defaultKeymapBrowse()
+	case previewMode:
+		return defaultKeymapPreview()
+	default:
+		return defaultKeymapBrowse()
+	}
+}
+
 func defaultKeymap() map[tui.Event][]*action {
 	keymap := make(map[tui.Event][]*action)
 	add := func(e tui.EventType, a actionType) {
@@ -472,7 +494,7 @@ func defaultKeymap() map[tui.Event][]*action {
 	add(tui.CtrlP, actUp)
 	add(tui.CtrlU, actUnixLineDiscard)
 	add(tui.CtrlW, actUnixWordRubout)
-	addEvent(tui.AltKey(' '), actToggleBrowse)
+	addEvent(tui.AltKey(' '), actBrowseMode)
 	add(tui.CtrlY, actYank)
 	if !util.IsWindows() {
 		add(tui.CtrlZ, actSigStop)
@@ -525,17 +547,17 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 	addEvent(tui.Key('G'), actFirst)
 
 	// Similar navigation for the preview window
-	addEvent(tui.AltKey('f'), actPreviewPageDown)
-	addEvent(tui.AltKey('b'), actPreviewPageUp)
-	addEvent(tui.AltKey('d'), actPreviewHalfPageDown)
-	addEvent(tui.AltKey('u'), actPreviewHalfPageUp)
-	addEvent(tui.AltKey('j'), actPreviewDown)
-	addEvent(tui.AltKey('k'), actPreviewUp)
-	addEvent(tui.AltKey('g'), actPreviewTop)
-	addEvent(tui.AltKey('G'), actPreviewBottom)
+	add(tui.CtrlF, actPreviewPageDown)
+	add(tui.CtrlB, actPreviewPageUp)
+	add(tui.CtrlD, actPreviewHalfPageDown)
+	add(tui.CtrlU, actPreviewHalfPageUp)
+	add(tui.CtrlJ, actPreviewDown)
+	add(tui.CtrlK, actPreviewUp)
+	add(tui.CtrlG, actPreviewTop)
+	addEvent(tui.CtrlAltKey('g'), actPreviewBottom)
 
 	// Other preview command(s)
-	addEvent(tui.Key('p'), actTogglePreview)
+	addEvent(tui.Key('p'), actPreviewMode)
 
 	// Edit line command(s)
 	addEvent(tui.Key('D'), actKillLine)
@@ -548,22 +570,21 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 	addEvent(tui.Key('$'), actEndOfLine)
 
 	// Command(s) to change to edit mode
-	addEvent(tui.AltKey(' '), actToggleBrowse)
-	addEvent(tui.Key('r'), actToggleBrowse, actClearQuery)      // Clear current query and drop into edit mode
-	addEvent(tui.Key('a'), actToggleBrowse, actForwardChar)     // Vim-like append command
-	addEvent(tui.Key('A'), actToggleBrowse, actEndOfLine)       // Vim-like append at end of line
-	addEvent(tui.Key('i'), actToggleBrowse)                     // Vim-like insert mode command
-	addEvent(tui.Key(' '), actToggleBrowse)                     // Nice shortcut to insert mode
-	addEvent(tui.Key('I'), actToggleBrowse, actBeginningOfLine) // Vim-like insert mode command
-	addEvent(tui.Key('/'), actToggleBrowse, actEndOfLine)
-	add(tui.BSpace, actToggleBrowse, actBackwardDeleteChar) // Allow shortcut to edit mode through backspace
+	addEvent(tui.AltKey(' '), actInsertMode)
+	addEvent(tui.Key('r'), actInsertMode, actClearQuery)      // Clear current query and drop into edit mode
+	addEvent(tui.Key('a'), actInsertMode, actForwardChar)     // Vim-like append command
+	addEvent(tui.Key('A'), actInsertMode, actEndOfLine)       // Vim-like append at end of line
+	addEvent(tui.Key('i'), actInsertMode)                     // Vim-like insert mode command
+	addEvent(tui.Key(' '), actInsertMode)                     // Nice shortcut to insert mode
+	addEvent(tui.Key('I'), actInsertMode, actBeginningOfLine) // Vim-like insert mode command
+	addEvent(tui.Key('/'), actInsertMode, actEndOfLine)
+	add(tui.BSpace, actInsertMode, actBackwardDeleteChar) // Allow shortcut to edit mode through backspace
 
 	// Other command(s)
 	addEvent(tui.Key('q'), actAbort)
 
 	// Replicate some of the command(s) from edit mode
 	add(tui.CtrlC, actAbort)
-	add(tui.CtrlG, actAbort)
 	add(tui.CtrlQ, actAbort)
 	add(tui.ESC, actAbort)
 	add(tui.CtrlL, actClearScreen)
@@ -592,12 +613,43 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 	return keymap
 }
 
+func defaultKeymapPreview() map[tui.Event][]*action {
+	keymap := make(map[tui.Event][]*action)
+	add := func(e tui.EventType, a ...actionType) {
+		keymap[e.AsEvent()] = toActions(a...)
+	}
+	addEvent := func(e tui.Event, a ...actionType) {
+		keymap[e] = toActions(a...)
+	}
+
+	// Preview navigation
+	addEvent(tui.Key('f'), actPreviewPageDown)
+	addEvent(tui.Key('b'), actPreviewPageUp)
+	addEvent(tui.Key('d'), actPreviewHalfPageDown)
+	addEvent(tui.Key('u'), actPreviewHalfPageUp)
+	addEvent(tui.Key('j'), actPreviewDown)
+	addEvent(tui.Key('k'), actPreviewUp)
+	addEvent(tui.Key('g'), actPreviewTop)
+	addEvent(tui.Key('G'), actPreviewBottom)
+
+	// Other preview command(s)
+	addEvent(tui.Key('b'), actBrowseMode)
+	addEvent(tui.Key('q'), actAbort)
+	add(tui.ESC, actBrowseMode)
+	add(tui.CtrlC, actAbort)
+
+	add(tui.Mouse, actMouse)
+	add(tui.LeftClick, actIgnore)
+	add(tui.RightClick, actToggle)
+	return keymap
+}
+
 func trimQuery(query string) []rune {
 	return []rune(strings.Replace(query, "\t", " ", -1))
 }
 
 func hasPreviewAction(opts *Options) bool {
-	for _, actions := range opts.Keymap {
+	for _, actions := range opts.ModeKeymaps[insertMode] {
 		for _, action := range actions {
 			if action.t == actPreview || action.t == actChangePreview {
 				return true
@@ -673,10 +725,6 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		wordRubout = fmt.Sprintf("%s[^%s]", sep, sep)
 		wordNext = fmt.Sprintf("[^%s]%s|(.$)", sep, sep)
 	}
-	keymapCopy := make(map[tui.Event][]*action)
-	for key, action := range opts.Keymap {
-		keymapCopy[key] = action
-	}
 	t := Terminal{
 		initDelay:          delay,
 		infoStyle:          opts.InfoStyle,
@@ -703,11 +751,9 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		toggleSort:         opts.ToggleSort,
 		track:              opts.Track,
 		delimiter:          opts.Delimiter,
-		expect:             opts.Expect,
-		expectBrowse:       opts.ExpectBrowse,
-		keymap:             opts.Keymap,
-		keymapOrg:          keymapCopy,
-		keymapBrowse:       opts.KeymapBrowse,
+		mode:               opts.Mode,
+		modeExpects:        opts.ModeExpects,
+		modeKeymaps:        opts.ModeKeymaps,
 		pressed:            "",
 		printQuery:         opts.PrintQuery,
 		history:            opts.History,
@@ -761,7 +807,6 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		tui:                renderer,
 		initFunc:           func() { renderer.Init() },
 		executing:          util.NewAtomicBool(false),
-		browseMode:         opts.BrowseMode,
 	}
 	t.prompt, t.promptLen = t.parsePrompt(opts.Prompt)
 	t.pointer, t.pointerLen = t.processTabs([]rune(opts.Pointer), 0)
@@ -801,7 +846,7 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		}
 	}
 
-	_, t.hasLoadActions = t.keymap[tui.Load.AsEvent()]
+	_, t.hasLoadActions = t.modeKeymaps[insertMode][tui.Load.AsEvent()]
 
 	if t.listenPort != nil {
 		err, port := startHttpServer(*t.listenPort, t.serverChan)
@@ -1070,12 +1115,12 @@ func (t *Terminal) UpdateList(merger *Merger) {
 		switch t.merger.Length() {
 		case 0:
 			zero := tui.Zero.AsEvent()
-			if _, prs := t.keymap[zero]; prs {
+			if _, prs := t.modeKeymaps[insertMode][zero]; prs {
 				t.eventChan <- zero
 			}
 		case 1:
 			one := tui.One.AsEvent()
-			if _, prs := t.keymap[one]; prs {
+			if _, prs := t.modeKeymaps[insertMode][one]; prs {
 				t.eventChan <- one
 			}
 		}
@@ -1089,7 +1134,14 @@ func (t *Terminal) output() bool {
 	if t.printQuery {
 		t.printer(string(t.input))
 	}
-	if len(t.expect) > 0 || len(t.expectBrowse) > 0 {
+	anyExpect := false
+	for _, v := range t.modeExpects {
+		if len(v) > 0 {
+			anyExpect = true
+			break
+		}
+	}
+	if anyExpect {
 		t.printer(t.pressed)
 	}
 	found := len(t.selected) > 0
@@ -1614,8 +1666,12 @@ func (t *Terminal) printInfo() {
 			output += fmt.Sprintf(" (%d/%d)", len(t.selected), t.multi)
 		}
 	}
-	if t.browseMode {
+	if t.mode == normalMode {
+		output += " N"
+	} else if t.mode == browseMode {
 		output += " B"
+	} else if t.mode == previewMode {
+		output += " P"
 	}
 	if t.progress > 0 && t.progress < 100 {
 		output += fmt.Sprintf(" (%d%%)", t.progress)
@@ -2862,7 +2918,7 @@ func (t *Terminal) Loop() {
 							t.track = trackDisabled
 							t.printInfo()
 						}
-						if onFocus, prs := t.keymap[tui.Focus.AsEvent()]; prs && focusChanged {
+						if onFocus, prs := t.modeKeymaps[insertMode][tui.Focus.AsEvent()]; prs && focusChanged {
 							t.serverChan <- onFocus
 						}
 						if focusChanged || version != t.version {
@@ -2942,7 +2998,7 @@ func (t *Terminal) Loop() {
 	}()
 
 	looping := true
-	_, startEvent := t.keymap[tui.Start.AsEvent()]
+	_, startEvent := t.modeKeymaps[insertMode][tui.Start.AsEvent()]
 
 	needBarrier := true
 	barrier := make(chan bool)
@@ -3025,35 +3081,22 @@ func (t *Terminal) Loop() {
 		scrollPreviewBy := func(amount int) {
 			scrollPreviewTo(t.previewer.offset + amount)
 		}
-		if t.browseMode {
-			for key, ret := range t.expectBrowse {
-				if keyMatch(key, event) {
-					t.pressed = ret
-					t.reqBox.Set(reqClose, nil)
-					t.mutex.Unlock()
-					return
-				}
-			}
-		} else {
-			for key, ret := range t.expect {
-				if keyMatch(key, event) {
-					t.pressed = ret
-					t.reqBox.Set(reqClose, nil)
-					t.mutex.Unlock()
-					return
-				}
+		expects := t.modeExpects[t.mode]
+		for key, ret := range expects {
+			if keyMatch(key, event) {
+				t.pressed = ret
+				t.reqBox.Set(reqClose, nil)
+				t.mutex.Unlock()
+				return
 			}
 		}
 
 		actionsForEvent := func(event tui.Event) []*action {
-			if t.browseMode {
-				if val, ok := t.keymapBrowse[event]; ok {
-					return val
-				}
-				return toActions(actIgnore)
+			keymap := t.modeKeymaps[t.mode]
+			if val, ok := keymap[event]; ok {
+				return val
 			}
-
-			return t.keymap[event]
+			return toActions(actIgnore)
 		}
 
 		actionsFor := func(eventType tui.EventType) []*action {
@@ -3649,13 +3692,13 @@ func (t *Terminal) Loop() {
 			case actUnbind:
 				keys := parseKeyChords(a.a, "PANIC")
 				for key := range keys {
-					delete(t.keymap, key)
+					delete(t.modeKeymaps[insertMode], key)
 				}
 			case actRebind:
 				keys := parseKeyChords(a.a, "PANIC")
 				for key := range keys {
-					if originalAction, found := t.keymapOrg[key]; found {
-						t.keymap[key] = originalAction
+					if originalAction, found := t.modeKeymaps[insertMode][key]; found {
+						t.modeKeymaps[insertMode][key] = originalAction
 					}
 				}
 			case actChangePreview:
@@ -3717,8 +3760,20 @@ func (t *Terminal) Loop() {
 						}
 					}
 				}
-			case actToggleBrowse:
-				t.browseMode = !t.browseMode
+			case actInsertMode:
+				t.mode = insertMode
+				t.printInfo()
+				t.refresh()
+			case actNormalMode:
+				t.mode = normalMode
+				t.printInfo()
+				t.refresh()
+			case actBrowseMode:
+				t.mode = browseMode
+				t.printInfo()
+				t.refresh()
+			case actPreviewMode:
+				t.mode = previewMode
 				t.printInfo()
 				t.refresh()
 			case actNoInputExit:
@@ -3746,12 +3801,12 @@ func (t *Terminal) Loop() {
 			t.truncateQuery()
 			queryChanged = string(previousInput) != string(t.input)
 			changed = changed || queryChanged
-			if onChanges, prs := t.keymap[tui.Change.AsEvent()]; queryChanged && prs {
+			if onChanges, prs := t.modeKeymaps[insertMode][tui.Change.AsEvent()]; queryChanged && prs {
 				if !doActions(onChanges) {
 					continue
 				}
 			}
-			if onEOFs, prs := t.keymap[tui.BackwardEOF.AsEvent()]; beof && prs {
+			if onEOFs, prs := t.modeKeymaps[insertMode][tui.BackwardEOF.AsEvent()]; beof && prs {
 				if !doActions(onEOFs) {
 					continue
 				}

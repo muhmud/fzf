@@ -305,10 +305,9 @@ type Options struct {
 	Exit0        bool
 	Filter       *string
 	ToggleSort   bool
-	Expect       map[tui.Event]string
-	ExpectBrowse map[tui.Event]string
-	Keymap       map[tui.Event][]*action
-	KeymapBrowse map[tui.Event][]*action
+	Mode         terminalMode
+	ModeKeymaps  map[terminalMode]map[tui.Event][]*action
+	ModeExpects  map[terminalMode]map[tui.Event]string
 	Preview      previewOpts
 	PrintQuery   bool
 	ReadZero     bool
@@ -331,7 +330,6 @@ type Options struct {
 	ListenPort   *int
 	ClearOnExit  bool
 	Version      bool
-	BrowseMode   bool
 }
 
 func defaultPreviewOpts(command string) previewOpts {
@@ -379,10 +377,9 @@ func defaultOptions() *Options {
 		Exit0:        false,
 		Filter:       nil,
 		ToggleSort:   false,
-		Expect:       make(map[tui.Event]string),
-		ExpectBrowse: make(map[tui.Event]string),
-		Keymap:       make(map[tui.Event][]*action),
-		KeymapBrowse: make(map[tui.Event][]*action),
+		Mode:         insertMode,
+		ModeKeymaps:  make(map[terminalMode]map[tui.Event][]*action),
+		ModeExpects:  make(map[terminalMode]map[tui.Event]string),
 		Preview:      defaultPreviewOpts(""),
 		PrintQuery:   false,
 		ReadZero:     false,
@@ -403,7 +400,6 @@ func defaultOptions() *Options {
 		PreviewLabel: labelOpts{},
 		ClearOnExit:  true,
 		Version:      false,
-		BrowseMode:   false,
 	}
 }
 
@@ -1178,8 +1174,12 @@ func parseActionList(masked string, original string, prevActions []*action, putA
 			appendAction(actEnableSearch)
 		case "disable-search":
 			appendAction(actDisableSearch)
-		case "toggle-browse":
-			appendAction(actToggleBrowse)
+		case "browse-mode":
+			appendAction(actBrowseMode)
+		case "preview-mode":
+			appendAction(actPreviewMode)
+		case "insert-mode":
+			appendAction(actInsertMode)
 		case "no-input-exit":
 			appendAction(actNoInputExit)
 		case "put":
@@ -1519,6 +1519,22 @@ func parseMargin(opt string, margin string) [4]sizeSpec {
 	return defaultMargin()
 }
 
+func parseTerminalMode(mode string) terminalMode {
+	switch mode {
+	case "insert":
+		return insertMode
+	case "normal":
+		return normalMode
+	case "browse":
+		return browseMode
+	case "preview":
+		return previewMode
+	default:
+		errorExit("invalid mode: " + mode)
+	}
+	return 0
+}
+
 func parseOptions(opts *Options, allArgs []string) {
 	var historyMax int
 	if opts.History == nil {
@@ -1576,17 +1592,18 @@ func parseOptions(opts *Options, allArgs []string) {
 		case "--scheme":
 			opts.Scheme = strings.ToLower(nextString(allArgs, &i, "scoring scheme required (default|path|history)"))
 		case "--expect":
+			expectModeMap := opts.ModeExpects[insertMode]
 			for k, v := range parseKeyChords(nextString(allArgs, &i, "key names required"), "key names required") {
-				opts.Expect[k] = v
+				expectModeMap[k] = v
 			}
-		case "--expect-browse":
+		case "--expect-mode":
+			expectMode := parseTerminalMode(nextString(allArgs, &i, "mode required"))
+			expectModeMap := opts.ModeExpects[expectMode]
 			for k, v := range parseKeyChords(nextString(allArgs, &i, "key names required"), "key names required") {
-				opts.ExpectBrowse[k] = v
+				expectModeMap[k] = v
 			}
 		case "--no-expect":
-			opts.Expect = make(map[tui.Event]string)
-		case "--no-expect-browse":
-			opts.ExpectBrowse = make(map[tui.Event]string)
+			opts.ModeExpects = make(map[terminalMode]map[tui.Event]string)
 		case "--enabled", "--no-phony":
 			opts.Phony = false
 		case "--disabled", "--phony":
@@ -1594,13 +1611,15 @@ func parseOptions(opts *Options, allArgs []string) {
 		case "--tiebreak":
 			opts.Criteria = parseTiebreak(nextString(allArgs, &i, "sort criterion required"))
 		case "--bind":
-			parseKeymap(opts.Keymap, nextString(allArgs, &i, "bind expression required"), errorExit)
-		case "--bind-browse":
-			parseKeymap(opts.KeymapBrowse, nextString(allArgs, &i, "bind browse expression required"), errorExit)
+			parseKeymap(opts.ModeKeymaps[insertMode], nextString(allArgs, &i, "bind expression required"), errorExit)
+		case "--bind-mode":
+			bindMode := parseTerminalMode(nextString(allArgs, &i, "mode required"))
+			parseKeymap(opts.ModeKeymaps[bindMode], nextString(allArgs, &i, "bind browse expression required"), errorExit)
 		case "--bind-all":
 			nextStr := nextString(allArgs, &i, "bind expression required")
-			parseKeymap(opts.Keymap, nextStr, errorExit)
-			parseKeymap(opts.KeymapBrowse, nextStr, errorExit)
+			for _, v := range opts.ModeKeymaps {
+				parseKeymap(v, nextStr, errorExit)
+			}
 		case "--color":
 			_, spec := optionalNextString(allArgs, &i)
 			if len(spec) == 0 {
@@ -1609,7 +1628,7 @@ func parseOptions(opts *Options, allArgs []string) {
 				opts.Theme = parseTheme(opts.Theme, spec)
 			}
 		case "--toggle-sort":
-			parseToggleSort(opts.Keymap, nextString(allArgs, &i, "key name required"))
+			parseToggleSort(opts.ModeKeymaps[insertMode], nextString(allArgs, &i, "key name required"))
 		case "-d", "--delimiter":
 			opts.Delimiter = delimiterRegexp(nextString(allArgs, &i, "delimiter required"))
 		case "-n", "--nth":
@@ -1828,10 +1847,8 @@ func parseOptions(opts *Options, allArgs []string) {
 			opts.ClearOnExit = false
 		case "--version":
 			opts.Version = true
-		case "--browse-mode":
-			opts.BrowseMode = true
-		case "--no-browse-mode":
-			opts.BrowseMode = false
+		case "--mode":
+			opts.Mode = parseTerminalMode(nextString(allArgs, &i, "mode required"))
 		case "--":
 			// Ignored
 		default:
@@ -1884,26 +1901,21 @@ func parseOptions(opts *Options, allArgs []string) {
 			} else if match, value := optString(arg, "--scrollbar="); match {
 				opts.Scrollbar = &value
 			} else if match, value := optString(arg, "--toggle-sort="); match {
-				parseToggleSort(opts.Keymap, value)
+				parseToggleSort(opts.ModeKeymaps[insertMode], value)
 			} else if match, value := optString(arg, "--expect="); match {
 				for k, v := range parseKeyChords(value, "key names required") {
-					opts.Expect[k] = v
-				}
-			} else if match, value := optString(arg, "--expect-browse="); match {
-				for k, v := range parseKeyChords(value, "key names required") {
-					opts.ExpectBrowse[k] = v
+					opts.ModeExpects[insertMode][k] = v
 				}
 			} else if match, value := optString(arg, "--tiebreak="); match {
 				opts.Criteria = parseTiebreak(value)
 			} else if match, value := optString(arg, "--color="); match {
 				opts.Theme = parseTheme(opts.Theme, value)
 			} else if match, value := optString(arg, "--bind="); match {
-				parseKeymap(opts.Keymap, value, errorExit)
-			} else if match, value := optString(arg, "--bind-browse="); match {
-				parseKeymap(opts.KeymapBrowse, value, errorExit)
+				parseKeymap(opts.ModeKeymaps[insertMode], value, errorExit)
 			} else if match, value := optString(arg, "--bind-all="); match {
-				parseKeymap(opts.Keymap, value, errorExit)
-				parseKeymap(opts.KeymapBrowse, value, errorExit)
+				for _, v := range opts.ModeKeymaps {
+					parseKeymap(v, value, errorExit)
+				}
 			} else if match, value := optString(arg, "--history="); match {
 				setHistory(value)
 			} else if match, value := optString(arg, "--history-size="); match {
@@ -2044,27 +2056,28 @@ func postProcessOptions(opts *Options) {
 
 	// Default actions for CTRL-N / CTRL-P when --history is set
 	if opts.History != nil {
-		if _, prs := opts.Keymap[tui.CtrlP.AsEvent()]; !prs {
-			opts.Keymap[tui.CtrlP.AsEvent()] = toActions(actPrevHistory)
+		keymap := opts.ModeKeymaps[insertMode]
+		if _, prs := keymap[tui.CtrlP.AsEvent()]; !prs {
+			keymap[tui.CtrlP.AsEvent()] = toActions(actPrevHistory)
 		}
-		if _, prs := opts.Keymap[tui.CtrlN.AsEvent()]; !prs {
-			opts.Keymap[tui.CtrlN.AsEvent()] = toActions(actNextHistory)
+		if _, prs := keymap[tui.CtrlN.AsEvent()]; !prs {
+			keymap[tui.CtrlN.AsEvent()] = toActions(actNextHistory)
 		}
 	}
 
-	// Extend the default key map
-	keymap := defaultKeymap()
-	postProcessKeymap(&keymap, opts, &opts.Keymap)
-	opts.Keymap = keymap
-
-	// Extend the default browse key map
-	keymapBrowse := defaultKeymapBrowse()
-	postProcessKeymap(&keymapBrowse, opts, &opts.KeymapBrowse)
-	opts.KeymapBrowse = keymapBrowse
+	// Extend key maps
+	modeKeymaps := make(map[terminalMode]map[tui.Event][]*action)
+	for _, v := range []terminalMode{normalMode, insertMode, browseMode, previewMode} {
+		keymap := defaultKeymapFor(v)
+		optsKeymap := opts.ModeKeymaps[v]
+		postProcessKeymap(&keymap, opts, &optsKeymap)
+		modeKeymaps[v] = keymap
+	}
+	opts.ModeKeymaps = modeKeymaps
 
 	// If 'double-click' is left unbound, bind it to the action bound to 'enter'
-	if _, prs := opts.Keymap[tui.DoubleClick.AsEvent()]; !prs {
-		opts.Keymap[tui.DoubleClick.AsEvent()] = opts.Keymap[tui.CtrlM.AsEvent()]
+	if _, prs := opts.ModeKeymaps[insertMode][tui.DoubleClick.AsEvent()]; !prs {
+		opts.ModeKeymaps[insertMode][tui.DoubleClick.AsEvent()] = opts.ModeKeymaps[insertMode][tui.CtrlM.AsEvent()]
 	}
 
 	if opts.Height.auto {

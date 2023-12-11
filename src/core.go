@@ -348,7 +348,7 @@ func Run(opts *Options, version string, revision string) {
 									if opts.PrintQuery {
 										opts.Printer(opts.Query)
 									}
-									if len(opts.Expect) > 0 {
+									if len(opts.ModeExpects[insertMode]) > 0 {
 										opts.Printer("")
 									}
 									for i := 0; i < count; i++ {
