@@ -336,6 +336,22 @@ func defaultPreviewOpts(command string) previewOpts {
 	return previewOpts{command, posRight, sizeSpec{50, true}, "", false, false, false, false, tui.DefaultBorderShape, 0, 0, nil}
 }
 
+func defaultModeKeyMaps() map[terminalMode]map[tui.Event][]*action {
+	modeKeymaps := make(map[terminalMode]map[tui.Event][]*action)
+	for _, v := range terminalModes {
+		modeKeymaps[v] = make(map[tui.Event][]*action)
+	}
+	return modeKeymaps
+}
+
+func defaultModeExpects() map[terminalMode]map[tui.Event]string {
+	modeExpects := make(map[terminalMode]map[tui.Event]string)
+	for _, v := range terminalModes {
+		modeExpects[v] = make(map[tui.Event]string)
+	}
+	return modeExpects
+}
+
 func defaultOptions() *Options {
 	return &Options{
 		Fuzzy:        true,
@@ -378,8 +394,8 @@ func defaultOptions() *Options {
 		Filter:       nil,
 		ToggleSort:   false,
 		Mode:         insertMode,
-		ModeKeymaps:  make(map[terminalMode]map[tui.Event][]*action),
-		ModeExpects:  make(map[terminalMode]map[tui.Event]string),
+		ModeKeymaps:  defaultModeKeyMaps(),
+		ModeExpects:  defaultModeExpects(),
 		Preview:      defaultPreviewOpts(""),
 		PrintQuery:   false,
 		ReadZero:     false,

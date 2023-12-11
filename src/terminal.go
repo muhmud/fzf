@@ -87,6 +87,8 @@ const (
 	previewMode
 )
 
+var terminalModes = []terminalMode{insertMode, normalMode, browseMode, previewMode}
+
 func (s resumableState) Enabled() bool {
 	return s == enabledState
 }
@@ -3092,11 +3094,14 @@ func (t *Terminal) Loop() {
 		}
 
 		actionsForEvent := func(event tui.Event) []*action {
-			keymap := t.modeKeymaps[t.mode]
-			if val, ok := keymap[event]; ok {
-				return val
+			if t.mode != insertMode {
+				keymap := t.modeKeymaps[t.mode]
+				if val, ok := keymap[event]; ok {
+					return val
+				}
+				return toActions(actIgnore)
 			}
-			return toActions(actIgnore)
+			return t.modeKeymaps[insertMode][event]
 		}
 
 		actionsFor := func(eventType tui.EventType) []*action {
