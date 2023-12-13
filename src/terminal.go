@@ -581,6 +581,7 @@ func defaultKeymapBrowse() map[tui.Event][]*action {
 	addEvent(tui.Key('I'), actInsertMode, actBeginningOfLine) // Vim-like insert mode command
 	addEvent(tui.Key('/'), actInsertMode, actEndOfLine)
 	add(tui.BSpace, actInsertMode, actBackwardDeleteChar) // Allow shortcut to edit mode through backspace
+	add(tui.AltBS, actBackwardKillWord, actInsertMode)
 
 	// Other command(s)
 	addEvent(tui.Key('q'), actAbort)
