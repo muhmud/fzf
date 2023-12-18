@@ -264,72 +264,73 @@ func firstLine(s string) string {
 
 // Options stores the values of command-line options
 type Options struct {
-	Fuzzy        bool
-	FuzzyAlgo    algo.Algo
-	Scheme       string
-	Extended     bool
-	Phony        bool
-	Case         Case
-	Normalize    bool
-	Nth          []Range
-	WithNth      []Range
-	Delimiter    Delimiter
-	Sort         int
-	Track        trackOption
-	Tac          bool
-	Criteria     []criterion
-	Multi        int
-	Ansi         bool
-	Mouse        bool
-	Theme        *tui.ColorTheme
-	Black        bool
-	Bold         bool
-	Height       heightSpec
-	MinHeight    int
-	Layout       layoutType
-	Cycle        bool
-	KeepRight    bool
-	Hscroll      bool
-	HscrollOff   int
-	ScrollOff    int
-	FileWord     bool
-	InfoStyle    infoStyle
-	InfoSep      string
-	Separator    *string
-	JumpLabels   string
-	Prompt       string
-	Pointer      string
-	Marker       string
-	Query        string
-	Select1      bool
-	Exit0        bool
-	Filter       *string
-	ToggleSort   bool
-	Mode         terminalMode
-	ModeKeymaps  map[terminalMode]map[tui.Event][]*action
-	ModeExpects  map[terminalMode]map[tui.Event]string
-	Preview      previewOpts
-	PrintQuery   bool
-	ReadZero     bool
-	Printer      func(string)
-	PrintSep     string
-	Sync         bool
-	History      *History
-	Header       []string
-	HeaderLines  int
-	HeaderFirst  bool
-	Ellipsis     string
-	Scrollbar    *string
-	Margin       [4]sizeSpec
-	Padding      [4]sizeSpec
-	BorderShape  tui.BorderShape
-	BorderLabel  labelOpts
-	PreviewLabel labelOpts
-	Unicode      bool
-	Tabstop      int
-	ListenPort   *int
-	ClearOnExit  bool
-	Version      bool
+	Fuzzy           bool
+	FuzzyAlgo       algo.Algo
+	Scheme          string
+	Extended        bool
+	Phony           bool
+	Case            Case
+	Normalize       bool
+	Nth             []Range
+	WithNth         []Range
+	Delimiter       Delimiter
+	Sort            int
+	Track           trackOption
+	Tac             bool
+	Criteria        []criterion
+	Multi           int
+	Ansi            bool
+	Mouse           bool
+	Theme           *tui.ColorTheme
+	Black           bool
+	Bold            bool
+	Height          heightSpec
+	MinHeight       int
+	Layout          layoutType
+	Cycle           bool
+	KeepRight       bool
+	Hscroll         bool
+	HscrollOff      int
+	ScrollOff       int
+	FileWord        bool
+	InfoStyle       infoStyle
+	InfoSep         string
+	Separator       *string
+	JumpLabels      string
+	Prompt          string
+	Pointer         string
+	Marker          string
+	Query           string
+	Select1         bool
+	Exit0           bool
+	Filter          *string
+	ToggleSort      bool
+	Mode            terminalMode
+	SmallResultSize int
+	ModeKeymaps     map[terminalMode]map[tui.Event][]*action
+	ModeExpects     map[terminalMode]map[tui.Event]string
+	Preview         previewOpts
+	PrintQuery      bool
+	ReadZero        bool
+	Printer         func(string)
+	PrintSep        string
+	Sync            bool
+	History         *History
+	Header          []string
+	HeaderLines     int
+	HeaderFirst     bool
+	Ellipsis        string
+	Scrollbar       *string
+	Margin          [4]sizeSpec
+	Padding         [4]sizeSpec
+	BorderShape     tui.BorderShape
+	BorderLabel     labelOpts
+	PreviewLabel    labelOpts
+	Unicode         bool
+	Tabstop         int
+	ListenPort      *int
+	ClearOnExit     bool
+	Version         bool
 }
 
 func defaultPreviewOpts(command string) previewOpts {
@@ -354,68 +355,69 @@ func defaultModeExpects() map[terminalMode]map[tui.Event]string {
 
 func defaultOptions() *Options {
 	return &Options{
-		Fuzzy:        true,
-		FuzzyAlgo:    algo.FuzzyMatchV2,
-		Scheme:       "default",
-		Extended:     true,
-		Phony:        false,
-		Case:         CaseSmart,
-		Normalize:    true,
-		Nth:          make([]Range, 0),
-		WithNth:      make([]Range, 0),
-		Delimiter:    Delimiter{},
-		Sort:         1000,
-		Track:        trackDisabled,
-		Tac:          false,
-		Criteria:     []criterion{byScore, byLength},
-		Multi:        0,
-		Ansi:         false,
-		Mouse:        true,
-		Theme:        tui.EmptyTheme(),
-		Black:        false,
-		Bold:         true,
-		MinHeight:    10,
-		Layout:       layoutDefault,
-		Cycle:        false,
-		KeepRight:    false,
-		Hscroll:      true,
-		HscrollOff:   10,
-		ScrollOff:    0,
-		FileWord:     false,
-		InfoStyle:    infoDefault,
-		Separator:    nil,
-		JumpLabels:   defaultJumpLabels,
-		Prompt:       "> ",
-		Pointer:      ">",
-		Marker:       ">",
-		Query:        "",
-		Select1:      false,
-		Exit0:        false,
-		Filter:       nil,
-		ToggleSort:   false,
-		Mode:         insertMode,
-		ModeKeymaps:  defaultModeKeyMaps(),
-		ModeExpects:  defaultModeExpects(),
-		Preview:      defaultPreviewOpts(""),
-		PrintQuery:   false,
-		ReadZero:     false,
-		Printer:      func(str string) { fmt.Println(str) },
-		PrintSep:     "\n",
-		Sync:         false,
-		History:      nil,
-		Header:       make([]string, 0),
-		HeaderLines:  0,
-		HeaderFirst:  false,
-		Ellipsis:     "..",
-		Scrollbar:    nil,
-		Margin:       defaultMargin(),
-		Padding:      defaultMargin(),
-		Unicode:      true,
-		Tabstop:      8,
-		BorderLabel:  labelOpts{},
-		PreviewLabel: labelOpts{},
-		ClearOnExit:  true,
-		Version:      false,
+		Fuzzy:           true,
+		FuzzyAlgo:       algo.FuzzyMatchV2,
+		Scheme:          "default",
+		Extended:        true,
+		Phony:           false,
+		Case:            CaseSmart,
+		Normalize:       true,
+		Nth:             make([]Range, 0),
+		WithNth:         make([]Range, 0),
+		Delimiter:       Delimiter{},
+		Sort:            1000,
+		Track:           trackDisabled,
+		Tac:             false,
+		Criteria:        []criterion{byScore, byLength},
+		Multi:           0,
+		Ansi:            false,
+		Mouse:           true,
+		Theme:           tui.EmptyTheme(),
+		Black:           false,
+		Bold:            true,
+		MinHeight:       10,
+		Layout:          layoutDefault,
+		Cycle:           false,
+		KeepRight:       false,
+		Hscroll:         true,
+		HscrollOff:      10,
+		ScrollOff:       0,
+		FileWord:        false,
+		InfoStyle:       infoDefault,
+		Separator:       nil,
+		JumpLabels:      defaultJumpLabels,
+		Prompt:          "> ",
+		Pointer:         ">",
+		Marker:          ">",
+		Query:           "",
+		Select1:         false,
+		Exit0:           false,
+		Filter:          nil,
+		ToggleSort:      false,
+		Mode:            insertMode,
+		SmallResultSize: 10,
+		ModeKeymaps:     defaultModeKeyMaps(),
+		ModeExpects:     defaultModeExpects(),
+		Preview:         defaultPreviewOpts(""),
+		PrintQuery:      false,
+		ReadZero:        false,
+		Printer:         func(str string) { fmt.Println(str) },
+		PrintSep:        "\n",
+		Sync:            false,
+		History:         nil,
+		Header:          make([]string, 0),
+		HeaderLines:     0,
+		HeaderFirst:     false,
+		Ellipsis:        "..",
+		Scrollbar:       nil,
+		Margin:          defaultMargin(),
+		Padding:         defaultMargin(),
+		Unicode:         true,
+		Tabstop:         8,
+		BorderLabel:     labelOpts{},
+		PreviewLabel:    labelOpts{},
+		ClearOnExit:     true,
+		Version:         false,
 	}
 }
 
@@ -1198,6 +1200,8 @@ func parseActionList(masked string, original string, prevActions []*action, putA
 			appendAction(actInsertMode)
 		case "no-input-exit":
 			appendAction(actNoInputExit)
+		case "small-result-browse":
+			appendAction(actSmallResultBrowse)
 		case "put":
 			if putAllowed {
 				appendAction(actRune)
@@ -1631,6 +1635,8 @@ func parseOptions(opts *Options, allArgs []string) {
 		case "--bind-mode":
 			bindMode := parseTerminalMode(nextString(allArgs, &i, "mode required"))
 			parseKeymap(opts.ModeKeymaps[bindMode], nextString(allArgs, &i, "bind browse expression required"), errorExit)
+		case "--small-result-size":
+			opts.SmallResultSize = nextInt(allArgs, &i, "small result size required")
 		case "--bind-all":
 			nextStr := nextString(allArgs, &i, "bind expression required")
 			for _, v := range opts.ModeKeymaps {
@@ -1932,6 +1938,8 @@ func parseOptions(opts *Options, allArgs []string) {
 				for _, v := range opts.ModeKeymaps {
 					parseKeymap(v, value, errorExit)
 				}
+			} else if match, value := optString(arg, "--small-result-size="); match {
+				opts.SmallResultSize = atoi(value)
 			} else if match, value := optString(arg, "--history="); match {
 				setHistory(value)
 			} else if match, value := optString(arg, "--history-size="); match {
@@ -1982,6 +1990,10 @@ func parseOptions(opts *Options, allArgs []string) {
 
 	if opts.Tabstop < 1 {
 		errorExit("tab stop must be a positive integer")
+	}
+
+	if opts.SmallResultSize < 1 {
+		errorExit("small result size must be a positive integer")
 	}
 
 	if opts.ListenPort != nil && (*opts.ListenPort < 0 || *opts.ListenPort > 65535) {

@@ -237,6 +237,7 @@ type Terminal struct {
 	printer            func(string)
 	printsep           string
 	merger             *Merger
+	smallResultSize    int
 	selected           map[int32]selectedItem
 	version            int64
 	revision           int
@@ -411,6 +412,7 @@ const (
 	actNormalMode
 	actBrowseMode
 	actPreviewMode
+	actSmallResultBrowse
 	actNoInputExit
 )
 
@@ -755,6 +757,7 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		track:              opts.Track,
 		delimiter:          opts.Delimiter,
 		mode:               opts.Mode,
+		smallResultSize:    opts.SmallResultSize,
 		modeExpects:        opts.ModeExpects,
 		modeKeymaps:        opts.ModeKeymaps,
 		pressed:            "",
@@ -3780,6 +3783,12 @@ func (t *Terminal) Loop() {
 				t.refresh()
 			case actPreviewMode:
 				t.mode = previewMode
+				t.printInfo()
+				t.refresh()
+			case actSmallResultBrowse:
+				if t.merger.Length() <= t.smallResultSize {
+					t.mode = browseMode
+				}
 				t.printInfo()
 				t.refresh()
 			case actNoInputExit:
