@@ -197,6 +197,7 @@ type Terminal struct {
 	toggleSort         bool
 	track              trackOption
 	delimiter          Delimiter
+	lastMode           terminalMode
 	mode               terminalMode
 	modeKeymaps        map[terminalMode]map[tui.Event][]*action
 	modeExpects        map[terminalMode]map[tui.Event]string
@@ -372,6 +373,7 @@ const (
 	actHidePreview
 	actTogglePreview
 	actTogglePreviewWrap
+	actTogglePreviewMode
 	actTransformBorderLabel
 	actTransformHeader
 	actTransformPreviewLabel
@@ -756,6 +758,7 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		toggleSort:         opts.ToggleSort,
 		track:              opts.Track,
 		delimiter:          opts.Delimiter,
+		lastMode:           opts.Mode,
 		mode:               opts.Mode,
 		smallResultSize:    opts.SmallResultSize,
 		modeExpects:        opts.ModeExpects,
@@ -3186,6 +3189,16 @@ func (t *Terminal) Loop() {
 					t.previewed.version = 0
 					req(reqPreviewRefresh)
 				}
+			case actTogglePreviewMode:
+				if t.hasPreviewWindow() {
+					t.lastMode = t.mode
+					t.mode = previewMode
+				} else if t.mode == previewMode {
+					t.mode = t.lastMode
+					t.lastMode = t.mode
+				}
+				t.printInfo()
+				t.refresh()
 			case actTransformPrompt:
 				prompt := t.executeCommand(a.a, false, true, true, true)
 				t.prompt, t.promptLen = t.parsePrompt(prompt)
@@ -3770,18 +3783,22 @@ func (t *Terminal) Loop() {
 					}
 				}
 			case actInsertMode:
+				t.lastMode = t.mode
 				t.mode = insertMode
 				t.printInfo()
 				t.refresh()
 			case actNormalMode:
+				t.lastMode = t.mode
 				t.mode = normalMode
 				t.printInfo()
 				t.refresh()
 			case actBrowseMode:
+				t.lastMode = t.mode
 				t.mode = browseMode
 				t.printInfo()
 				t.refresh()
 			case actPreviewMode:
+				t.lastMode = t.mode
 				t.mode = previewMode
 				t.printInfo()
 				t.refresh()
