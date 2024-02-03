@@ -395,7 +395,7 @@ func defaultOptions() *Options {
 		Filter:          nil,
 		ToggleSort:      false,
 		Mode:            insertMode,
-		SmallResultSize: 10,
+		SmallResultSize: 16,
 		ModeKeymaps:     defaultModeKeyMaps(),
 		ModeExpects:     defaultModeExpects(),
 		Preview:         defaultPreviewOpts(""),
